@@ -41,6 +41,24 @@ function awesome_weather_shortcode( $atts )
 	return awesome_weather_logic( $atts );	
 }
 
+// Geolocate the IP using ip-api.com
+function awesome_geolocate_ip() {
+  $ip = $_SERVER['REMOTE_ADDR'];
+
+  $ch = curl_init(); 
+  curl_setopt($ch, CURLOPT_URL, "http://ip-api.com/json/$ip"); 
+  curl_setopt($ch, CURLOPT_HEADER, 0); 
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1); 
+  $data = curl_exec($ch);
+  curl_close($ch);
+
+  $json = json_decode($data);
+
+  if ($json->status == "success")
+    return strtolower($json->city.','.$json->countryCode);
+  else
+    return false;
+}
 
 // THE LOGIC
 function awesome_weather_logic( $atts )
@@ -61,10 +79,18 @@ function awesome_weather_logic( $atts )
 
 	if( !$location ) { return awesome_weather_error(); }
 	
-	
 	//FIND AND CACHE CITY ID
 	$city_id 						= false;
 	$city_name_slug 				= sanitize_title( $location );
+
+  // If geolocation return something, we override the specified city
+  if (strtolower($location) == 'geolocation' && $city_and_country = awesome_geolocate_ip()) {
+		$api_query = "q=" . $city_and_country;
+    list($override_title, $country) = explode(',', $city_and_country);
+		$city_name_slug = sanitize_title($override_title);
+    delete_transient( $weather_transient_name );
+  }
+	
 	$city_id_transient_name 		= 'awesome-weather-cityid-' . $city_name_slug;
 	$weather_transient_name 		= 'awesome-weather-' . $units . '-' . $city_name_slug;
 
@@ -327,7 +353,7 @@ class AwesomeWeatherWidget extends WP_Widget
         $background			= isset($instance['background']) ? esc_attr($instance['background']) : "";
         ?>
         <p>
-          <label for="<?php echo $this->get_field_id('location'); ?>"><?php _e('Location:'); ?></label> 
+          <label for="<?php echo $this->get_field_id('location'); ?>"><?php _e('Location (type geolocation for IP based location:'); ?></label> 
           <input class="widefat" id="<?php echo $this->get_field_id('location'); ?>" name="<?php echo $this->get_field_name('location'); ?>" type="text" value="<?php echo $location; ?>" />
         </p>
                 
